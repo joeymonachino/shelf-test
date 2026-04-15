@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Shelf — Book Ratings</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ... Keeping your original CSS ... */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#12101a;--bg2:#1a1726;--bg3:#211e30;--card:#1e1b2e;--card2:#252238;
+  --border:rgba(180,160,255,0.13);--border2:rgba(180,160,255,0.25);
+  --accent:#c8a8ff;--accent2:#f5c5e0;--accent3:#7fc8c8;
+  --gold:#f0c060;--gold2:#e8a030;
+  --text:#e8e0f8;--text2:#a89ec0;--text3:#6a6080;
+  --star-on:#f0c060;--star-off:#3a3455;
+  --darian:#c8a8ff;--joey:#7fc8c8;--jami:#f5c5e0;
+  --radius:14px;--radius-sm:8px;
+}
+html,body{height:100%}
+body{font-family:'Crimson Pro',Georgia,serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;position:relative}
+body::after{content:'';position:fixed;top:-100px;left:50%;transform:translateX(-50%);width:800px;height:400px;background:radial-gradient(ellipse at center,rgba(130,80,200,0.10) 0%,transparent 70%);pointer-events:none;z-index:0}
+.night-sky{position:fixed;top:0;right:0;width:440px;height:440px;pointer-events:none;z-index:1;overflow:hidden}
+.night-sky svg{position:absolute;top:0;right:0;width:100%;height:100%}
+header{position:relative;z-index:10;text-align:center;padding:2.5rem 1rem 0}
+.logo{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.2rem);font-weight:700;color:var(--text);line-height:1}
+.logo span{color:var(--accent);font-style:italic}
+.tagline{font-family:'Crimson Pro',serif;font-style:italic;font-weight:300;font-size:1.05rem;color:var(--text2);margin-top:.35rem;letter-spacing:.03em}
+.tabs{display:flex;justify-content:center;margin:1.8rem auto 0;max-width:340px;background:var(--bg3);border-radius:40px;padding:5px;border:1px solid var(--border);position:relative;z-index:10}
+.tab-btn{flex:1;padding:.55rem 1.2rem;border:none;background:transparent;border-radius:35px;font-family:'Space Mono',monospace;font-size:.75rem;color:var(--text2);cursor:pointer;transition:all .25s;letter-spacing:.02em}
+.tab-btn.active{background:var(--accent);color:#1a0d35;font-weight:700}
+main{position:relative;z-index:5;max-width:1300px;margin:0 auto;padding:2rem 1.2rem 4rem}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.shelf-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.8rem;flex-wrap:wrap;gap:.8rem}
+.shelf-title{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text2);font-style:italic}
+.legend{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-family:'Space Mono',monospace;font-size:.68rem;color:var(--text2)}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+.books-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1.4rem}
+.empty-state{grid-column:1/-1;text-align:center;padding:5rem 2rem}
+.empty-state p{font-family:'Playfair Display',serif;font-style:italic;font-size:1.3rem;color:var(--text3)}
+.empty-state small{display:block;margin-top:.5rem;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--text3)}
+.book-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:transform .2s,border-color .2s,box-shadow .2s;position:relative;}
+.book-card:hover{transform:translateY(-4px);border-color:var(--border2);box-shadow:0 16px 40px rgba(0,0,0,.5)}
+.book-cover-wrap{position:relative;aspect-ratio:2/3;overflow:hidden;background:var(--bg3)}
+.book-cover-img{width:100%;height:100%;object-fit:cover;display:block}
+.book-cover-fallback{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1rem;background:linear-gradient(160deg,var(--bg3) 0%,var(--card2) 100%)}
+.book-cover-fallback .fb-title{font-family:'Playfair Display',serif;font-size:.9rem;font-weight:700;text-align:center;color:var(--accent);line-height:1.3;margin-bottom:.5rem}
+.book-cover-fallback .fb-author{font-family:'Crimson Pro',serif;font-style:italic;font-size:.78rem;color:var(--text2);text-align:center}
+.cover-overlay{position:absolute;bottom:0;left:0;right:0;height:60%;background:linear-gradient(to top,rgba(18,16,26,.92) 0%,transparent 100%);pointer-events:none}
+.avg-badge{position:absolute;top:10px;right:10px;background:rgba(18,16,26,.85);border:1px solid var(--gold2);border-radius:20px;padding:3px 9px;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--gold)}
+.series-badge{position:absolute;top:10px;left:10px;background:rgba(18,16,26,.85);border:1px solid rgba(200,168,255,.3);border-radius:20px;padding:2px 7px;font-family:'Space Mono',monospace;font-size:.56rem;color:var(--accent);max-width:calc(100% - 24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* DELETE BUTTON STYLING */
+.btn-delete{position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:50%;background:rgba(20,15,30,0.8);border:1px solid var(--border);color:var(--text3);font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:20;transition:all 0.2s;opacity:0;}
+.book-card:hover .btn-delete{opacity:1;}
+.btn-delete:hover{background:rgba(200,100,100,0.2);color:var(--accent2);border-color:var(--accent2);}
+
+.book-info{padding:.82rem .88rem .68rem}
+.book-title{font-family:'Playfair Display',serif;font-size:.92rem;font-weight:700;line-height:1.3;color:var(--text);margin-bottom:.2rem}
+.book-author{font-family:'Crimson Pro',serif;font-style:italic;font-size:.82rem;color:var(--text2);margin-bottom:.82rem}
+.ratings-block{display:flex;flex-direction:column;gap:.4rem}
+.rater-row{display:flex;align-items:center;gap:.5rem}
+.rater-label{font-family:'Space Mono',monospace;font-size:.6rem;width:42px;flex-shrink:0;letter-spacing:.03em}
+.rater-label.darian{color:var(--darian)}.rater-label.joey{color:var(--joey)}.rater-label.jami{color:var(--jami)}
+.stars{display:flex;gap:2px;flex:1}
+.star{width:13px;height:13px;cursor:pointer;color:var(--star-off);font-size:12px;line-height:13px;text-align:center;transition:color .15s,transform .1s;user-select:none;-webkit-user-select:none}
+.star.on{color:var(--star-on)}.star:hover{transform:scale(1.2)}
+.review-icon{width:18px;height:18px;flex-shrink:0;cursor:pointer;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;transition:background .15s}
+.review-icon:hover{background:var(--bg3)}.review-icon.has-review{color:var(--accent2)}.review-icon.no-review{color:var(--text3)}
+.modal-overlay{position:fixed;inset:0;background:rgba(10,8,20,.82);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1.5rem;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:1.8rem;max-width:420px;width:100%;transform:translateY(16px);transition:transform .25s}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal h3{font-family:'Playfair Display',serif;font-size:1.15rem;margin-bottom:.3rem}
+.modal p.modal-sub{font-style:italic;font-size:.9rem;color:var(--text2);margin-bottom:1.2rem}
+.modal textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Crimson Pro',serif;font-size:1rem;padding:.8rem;resize:vertical;min-height:110px;outline:none;transition:border-color .15s}
+.modal textarea:focus{border-color:var(--border2)}
+.modal-actions{display:flex;gap:.7rem;margin-top:1rem;justify-content:flex-end}
+.btn{font-family:'Space Mono',monospace;font-size:.72rem;padding:.55rem 1.1rem;border-radius:30px;border:1px solid var(--border2);cursor:pointer;transition:all .15s;letter-spacing:.03em}
+.btn-ghost{background:transparent;color:var(--text2)}.btn-ghost:hover{background:var(--bg3)}
+.btn-primary{background:var(--accent);color:#1a0d35;border-color:var(--accent);font-weight:700}.btn-primary:hover{background:#d8bcff}
+.add-panel{max-width:580px;margin:0 auto}
+.add-panel h2{font-family:'Playfair Display',serif;font-size:1.7rem;margin-bottom:.35rem}
+.add-panel .add-sub{font-style:italic;color:var(--text2);margin-bottom:2rem;font-size:1rem}
+.form-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2rem}
+.field{margin-bottom:1.4rem}
+.field label{display:block;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--text2);letter-spacing:.05em;margin-bottom:.55rem}
+.field input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Crimson Pro',serif;font-size:1rem;padding:.75rem 1rem;outline:none;transition:border-color .15s}
+.field input:focus{border-color:var(--border2)}.field input::placeholder{color:var(--text3);font-style:italic}
+.cover-preview{display:flex;gap:1.5rem;align-items:flex-start;margin-bottom:1.8rem;flex-wrap:wrap}
+.cover-thumb{width:110px;height:165px;border-radius:var(--radius-sm);border:1px solid var(--border);overflow:hidden;background:var(--bg3);flex-shrink:0;display:flex;align-items:center;justify-content:center;position:relative}
+.cover-thumb img{width:100%;height:100%;object-fit:cover;display:none}.cover-thumb img.loaded{display:block}
+.cover-thumb-placeholder{font-size:2rem;opacity:.25;position:absolute}
+.cover-status{font-family:'Space Mono',monospace;font-size:.65rem;color:var(--text3);margin-top:.4rem}
+.cover-status.found{color:var(--accent3)}.cover-status.not-found{color:var(--accent2)}
+.btn-add-book{width:100%;padding:.9rem;font-size:.8rem;border-radius:var(--radius-sm)}
+.btn-add-book:disabled{opacity:.4;cursor:not-allowed}
+.fetch-status{font-family:'Space Mono',monospace;font-size:.65rem;color:var(--text3);text-align:center;margin-top:1rem}
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(0px);background:var(--card2);border:1px solid var(--border2);border-radius:30px;padding:.75rem 1.5rem;font-family:'Space Mono',monospace;font-size:.72rem;color:var(--accent);z-index:2000;transition:opacity .3s,transform .3s;pointer-events:none;opacity:0}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="night-sky" aria-hidden="true">
+<svg viewBox="0 0 440 440" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="skyG" cx="100%" cy="0%" r="75%">
+      <stop offset="0%" stop-color="#180e2e" stop-opacity="0.97"/>
+      <stop offset="55%" stop-color="#130c22" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#12101a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="moonH" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff8e0" stop-opacity="0.85"/>
+      <stop offset="45%" stop-color="#f0e0b0" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#c8a8ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="fg"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="fs"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="shot" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fff" stop-opacity="0"/><stop offset="100%" stop-color="#fff" stop-opacity="0.75"/></linearGradient>
+  </defs>
+  <rect width="440" height="440" fill="url(#skyG)"/>
+  <circle cx="378" cy="52" r="68" fill="url(#moonH)" opacity="0.38"/>
+  <circle cx="378" cy="52" r="26" fill="#fff8e0" opacity="0.93" filter="url(#fs)"/>
+  <circle cx="391" cy="47" r="21" fill="#180e2e" opacity="0.88"/>
+  <ellipse cx="285" cy="98" rx="40" ry="14" fill="rgba(180,130,255,0.055)" transform="rotate(-22,285,98)"/>
+  <ellipse cx="345" cy="180" rx="32" ry="11" fill="rgba(100,180,230,0.045)" transform="rotate(-12,345,180)"/>
+  <line x1="160" y1="28" x2="198" y2="63" stroke="url(#shot)" stroke-width="0.9"/>
+  <circle cx="160" cy="28" r="0.9" fill="#fff" opacity="0.8"/>
+  <g filter="url(#fg)">
+    <circle cx="292" cy="24" r="1.9" fill="#fff" opacity="0.96"/>
+    <circle cx="250" cy="54" r="1.7" fill="#fff8f0" opacity="0.90"/>
+    <circle cx="196" cy="32" r="1.8" fill="#fff8e0" opacity="0.93"/>
+    <circle cx="318" cy="72" r="1.5" fill="#d8eeff" opacity="0.88"/>
+    <circle cx="208" cy="82" r="1.3" fill="#fff" opacity="0.80"/>
+    <circle cx="268" cy="108" r="1.2" fill="#e8d8ff" opacity="0.76"/>
+    <circle cx="328" cy="122" r="1.1" fill="#d8eeff" opacity="0.72"/>
+    <circle cx="164" cy="68" r="1.2" fill="#fff8e0" opacity="0.75"/>
+    <circle cx="395" cy="110" r="1.0" fill="#e8d8ff" opacity="0.68"/>
+  </g>
+  <g opacity="0.62" filter="url(#fg)">
+    <line x1="292" y1="20.5" x2="292" y2="27.5" stroke="#fff8e0" stroke-width="0.55"/>
+    <line x1="288.5" y1="24" x2="295.5" y2="24" stroke="#fff8e0" stroke-width="0.55"/>
+  </g>
+  <g opacity="0.50" filter="url(#fg)">
+    <line x1="196" y1="28.5" x2="196" y2="35.5" stroke="#fff8d0" stroke-width="0.5"/>
+    <line x1="192.5" y1="32" x2="199.5" y2="32" stroke="#fff8d0" stroke-width="0.5"/>
+  </g>
+  <g opacity="0.40" filter="url(#fg)">
+    <line x1="250" y1="50.5" x2="250" y2="57.5" stroke="#fff" stroke-width="0.45"/>
+    <line x1="246.5" y1="54" x2="253.5" y2="54" stroke="#fff" stroke-width="0.45"/>
+  </g>
+  <circle cx="235" cy="108" r="0.9" fill="#fff" opacity="0.68"/>
+  <circle cx="302" cy="95" r="0.85" fill="#fff8e0" opacity="0.64"/>
+  <circle cx="358" cy="142" r="0.9" fill="#d8eeff" opacity="0.62"/>
+  <circle cx="175" cy="105" r="0.85" fill="#fff" opacity="0.60"/>
+  <circle cx="415" cy="148" r="0.8" fill="#e8d8ff" opacity="0.58"/>
+  <circle cx="278" cy="162" r="0.85" fill="#fff" opacity="0.58"/>
+  <circle cx="340" cy="192" r="0.8" fill="#d8eeff" opacity="0.54"/>
+  <circle cx="138" cy="88" r="0.9" fill="#fff8e0" opacity="0.56"/>
+  <circle cx="218" cy="145" r="0.75" fill="#e0d0ff" opacity="0.52"/>
+  <circle cx="410" cy="195" r="0.85" fill="#fff" opacity="0.52"/>
+  <circle cx="256" cy="195" r="0.7" fill="#fff8e0" opacity="0.50"/>
+  <circle cx="130" cy="48" r="0.65" fill="#fff" opacity="0.48"/>
+  <circle cx="188" cy="122" r="0.6" fill="#e8d8ff" opacity="0.45"/>
+  <circle cx="370" cy="215" r="0.6" fill="#fff" opacity="0.43"/>
+  <circle cx="420" cy="250" r="0.65" fill="#d8eeff" opacity="0.40"/>
+  <circle cx="295" cy="222" r="0.6" fill="#fff8e0" opacity="0.43"/>
+  <circle cx="148" cy="140" r="0.6" fill="#fff" opacity="0.40"/>
+  <circle cx="228" cy="212" r="0.5" fill="#e0d0ff" opacity="0.38"/>
+  <circle cx="385" cy="255" r="0.55" fill="#fff" opacity="0.36"/>
+  <circle cx="322" cy="255" r="0.6" fill="#d8eeff" opacity="0.38"/>
+  <circle cx="105" cy="78" r="0.5" fill="#fff" opacity="0.38"/>
+  <circle cx="172" cy="172" r="0.5" fill="#fff8e0" opacity="0.36"/>
+  <circle cx="430" cy="170" r="0.5" fill="#e8d8ff" opacity="0.36"/>
+  <circle cx="268" cy="268" r="0.5" fill="#fff" opacity="0.33"/>
+  <circle cx="348" cy="298" r="0.5" fill="#d8eeff" opacity="0.30"/>
+  <circle cx="202" cy="255" r="0.45" fill="#fff" opacity="0.30"/>
+  <circle cx="85" cy="105" r="0.5" fill="#e0d8ff" opacity="0.33"/>
+  <circle cx="425" cy="318" r="0.45" fill="#fff" opacity="0.28"/>
+  <circle cx="308" cy="318" r="0.4" fill="#d8eeff" opacity="0.26"/>
+  <circle cx="155" cy="215" r="0.4" fill="#fff" opacity="0.28"/>
+  <circle cx="398" cy="358" r="0.4" fill="#e8d8ff" opacity="0.24"/>
+  <circle cx="268" cy="348" r="0.4" fill="#fff" opacity="0.23"/>
+  <circle cx="65" cy="58" r="0.4" fill="#fff" opacity="0.28"/>
+  <circle cx="115" cy="168" r="0.4" fill="#e0d0ff" opacity="0.26"/>
+  <circle cx="182" cy="308" r="0.35" fill="#fff" opacity="0.22"/>
+  <circle cx="348" cy="378" r="0.35" fill="#d8eeff" opacity="0.20"/>
+  <circle cx="435" cy="402" r="0.3" fill="#fff" opacity="0.18"/>
+  <circle cx="298" cy="398" r="0.3" fill="#e8d8ff" opacity="0.17"/>
+  <circle cx="210" cy="378" r="0.3" fill="#fff" opacity="0.17"/>
+  <circle cx="52" cy="32" r="0.35" fill="#fff" opacity="0.26"/>
+  <circle cx="72" cy="142" r="0.35" fill="#e0d8ff" opacity="0.24"/>
+  <circle cx="118" cy="218" r="0.3" fill="#fff" opacity="0.22"/>
+  <circle cx="435" cy="82" r="0.4" fill="#e8d8ff" opacity="0.32"/>
+</svg>
+</div>
+
+<header>
+  <div class="logo">The <span>Shelf</span></div>
+  <p class="tagline">books read, stars given, opinions had</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('shelf')">📚 The Shelf</button>
+  <button class="tab-btn" onclick="switchTab('add')">＋ Add Book</button>
+</div>
+
+<main>
+  <div id="tab-shelf" class="tab-panel active">
+    <div class="shelf-header">
+      <p class="shelf-title" id="shelf-count"></p>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--darian)"></div>darian</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--joey)"></div>joey</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--jami)"></div>jami</div>
+      </div>
+    </div>
+    <p class="fetch-status" id="fetch-status"></p>
+    <div class="books-grid" id="books-grid"></div>
+  </div>
+
+  <div id="tab-add" class="tab-panel">
+    <div class="add-panel">
+      <h2>Add a Book</h2>
+      <p class="add-sub">Enter the title and author — we'll fetch the cover for you.</p>
+      <div class="form-card">
+        <div class="field"><label>BOOK TITLE</label><input type="text" id="input-title" placeholder="e.g. The Night Circus" oninput="onFieldChange()"></div>
+        <div class="field"><label>AUTHOR</label><input type="text" id="input-author" placeholder="e.g. Erin Morgenstern" oninput="onFieldChange()"></div>
+        <div class="cover-preview">
+          <div>
+            <div class="cover-thumb" id="cover-thumb">
+              <span class="cover-thumb-placeholder">📖</span>
+              <img id="cover-preview-img" alt="cover">
+            </div>
+            <p class="cover-status" id="cover-status">awaiting title...</p>
+          </div>
+          <div style="flex:1;min-width:160px;"><p style="font-size:.88rem;color:var(--text2);line-height:1.6;font-style:italic;">Cover art is fetched from Open Library automatically.</p></div>
+        </div>
+        <button class="btn btn-primary btn-add-book" id="btn-add" onclick="addBook()" disabled>Add to The Shelf</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOnBg(event)">
+  <div class="modal">
+    <h3 id="modal-title"></h3>
+    <p class="modal-sub" id="modal-sub"></p>
+    <textarea id="modal-textarea" placeholder="Write your thoughts on this book..."></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveReview()">Save Review</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// !!! IMPORTANT: ADD YOUR KEYS HERE !!!
+const SUPABASE_URL = 'https://kchfckwnlrwkunjybfpz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtjaGZja3dubHJ3a3VuanliZnB6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNjQwOTQsImV4cCI6MjA5MTg0MDA5NH0.2EDdO_49Cdu0641NmGRy9lskx9IcPvuZ1myi_sdd_Lk';
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const RATERS=['darian','joey','jami'];
+let books=[];
+let modalState=null;
+let coverUrl=null;
+let coverTimer=null;
+
+async function load() {
+  const { data, error } = await _supabase
+    .from('books')
+    .select('*');
+
+  if (error) {
+    console.error('Fetch error:', error);
+    showToast('Error loading shelf - Check API keys');
+    return;
+  }
+  
+  books = data || [];
+  render();
+}
+
+function getAvg(book){
+  const v=RATERS.map(r=>book.ratings[r]).filter(x=>x>0);
+  return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;
+}
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+function render(){
+  const sorted=[...books].sort((a,b)=>{
+    const av=getAvg(a),bv=getAvg(b);
+    if(av===null&&bv===null)return 0;
+    if(av===null)return 1;if(bv===null)return -1;
+    return bv-av;
+  });
+  const grid=document.getElementById('books-grid');
+  document.getElementById('shelf-count').textContent=books.length?`${books.length} books on the shelf`:'';
+  grid.innerHTML='';
+  if(!books.length){grid.innerHTML='<div class="empty-state"><p>Your shelf is empty.</p><small>Add a book to get started.</small></div>';return;}
+  sorted.forEach(book=>{
+    const card=document.createElement('div');card.className='book-card';
+    const avg=getAvg(book);
+    const coverHtml=book.coverUrl
+      ?`<img class="book-cover-img" src="${esc(book.coverUrl)}" alt="cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="book-cover-fallback" style="display:none"><div class="fb-title">${esc(book.title)}</div><div class="fb-author">${esc(book.author)}</div></div>`
+      :`<div class="book-cover-fallback"><div class="fb-title">${esc(book.title)}</div><div class="fb-author">${esc(book.author)}</div></div>`;
+    const avgB=avg!==null?`<div class="avg-badge">★ ${avg.toFixed(1)}</div>`:'';
+    const serB=book.series?`<div class="series-badge">${esc(book.series)}</div>`:'';
+    const ratingHtml=RATERS.map(r=>{
+      const v=book.ratings[r]||0;
+      const hr=!!(book.reviews&&book.reviews[r]);
+      const stars=[1,2,3,4,5].map(i=>`<span class="star ${v>=i?'on':''}" onclick="setRating('${book.id}','${r}',${i})">${v>=i?'★':'☆'}</span>`).join('');
+      return`<div class="rater-row"><span class="rater-label ${r}">${r}</span><div class="stars">${stars}</div><span class="review-icon ${hr?'has-review':'no-review'}" onclick="openModal('${book.id}','${r}')">✎</span></div>`;
+    }).join('');
+    
+    // ADDED DELETE BUTTON IN HTML BELOW
+    card.innerHTML=`
+      <button class="btn-delete" onclick="deleteBook('${book.id}', '${esc(book.title)}')">×</button>
+      <div class="book-cover-wrap">${coverHtml}<div class="cover-overlay"></div>${avgB}${serB}</div>
+      <div class="book-info">
+        <div class="book-title">${esc(book.title)}</div>
+        <div class="book-author">${esc(book.author)}</div>
+        <div class="ratings-block">${ratingHtml}</div>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+// DELETE FUNCTION
+async function deleteBook(id, title) {
+  if (!confirm(`Are you sure you want to remove "${title}" from the shelf?`)) return;
+
+  const { error } = await _supabase
+    .from('books')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    showToast('Error deleting book');
+  } else {
+    books = books.filter(b => b.id !== id);
+    render();
+    showToast(`Removed "${title}"`);
+  }
+}
+
+async function setRating(id, rater, val) {
+  const b = books.find(x => x.id === id);
+  if (!b) return;
+  const newVal = (b.ratings[rater] === val) ? 0 : val;
+  const updatedRatings = { ...b.ratings, [rater]: newVal };
+  const { error } = await _supabase.from('books').update({ ratings: updatedRatings }).eq('id', id);
+  if (error) { showToast('Error saving rating'); } else { b.ratings[rater] = newVal; render(); }
+}
+
+function openModal(id,rater){
+  const b=books.find(x=>x.id===id);if(!b)return;
+  modalState={id,rater};
+  document.getElementById('modal-title').textContent=b.title;
+  document.getElementById('modal-sub').textContent=`${rater}'s review`;
+  document.getElementById('modal-textarea').value=(b.reviews&&b.reviews[rater])||'';
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('modal-textarea').focus(),100);
+}
+function closeModal(){document.getElementById('modal-overlay').classList.remove('open');modalState=null;}
+function closeModalOnBg(e){if(e.target===document.getElementById('modal-overlay'))closeModal();}
+
+async function saveReview() {
+  if (!modalState) return;
+  const b = books.find(x => x.id === modalState.id);
+  if (!b) return;
+  const newReviewText = document.getElementById('modal-textarea').value.trim();
+  const updatedReviews = { ...b.reviews, [modalState.rater]: newReviewText };
+  const { error } = await _supabase.from('books').update({ reviews: updatedReviews }).eq('id', b.id);
+  if (error) { showToast('Error saving review'); } else { b.reviews[modalState.rater] = newReviewText; render(); closeModal(); showToast('Review saved ✓'); }
+}
+
+function switchTab(name){
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',(i===0&&name==='shelf')||(i===1&&name==='add')));
+  document.getElementById('tab-shelf').classList.toggle('active',name==='shelf');
+  document.getElementById('tab-add').classList.toggle('active',name==='add');
+}
+
+function onFieldChange(){
+  const t=document.getElementById('input-title').value.trim();
+  const a=document.getElementById('input-author').value.trim();
+  document.getElementById('btn-add').disabled=!(t&&a);
+  clearTimeout(coverTimer);
+  if(t)coverTimer=setTimeout(()=>fetchCoverPreview(t,a),600);else resetCoverPreview();
+}
+function resetCoverPreview(){
+  const img=document.getElementById('cover-preview-img');
+  img.classList.remove('loaded');img.src='';coverUrl=null;
+  document.getElementById('cover-status').textContent='awaiting title...';
+}
+async function fetchCoverPreview(title,author){
+  document.getElementById('cover-status').textContent='searching...';
+  try{
+    const q=encodeURIComponent(title+' '+author);
+    const resp=await fetch(`https://openlibrary.org/search.json?q=${q}&fields=isbn,cover_edition_key&limit=5`);
+    const data=await resp.json();
+    let found=null;
+    for(const doc of(data.docs||[])){
+      if(doc.cover_edition_key){found=`https://covers.openlibrary.org/b/olid/${doc.cover_edition_key}-L.jpg`;break;}
+      if(doc.isbn&&doc.isbn.length){found=`https://covers.openlibrary.org/b/isbn/${doc.isbn[0]}-L.jpg`;break;}
+    }
+    if(found){
+      const ok=await testImg(found);
+      if(ok){coverUrl=found;const img=document.getElementById('cover-preview-img');img.src=found;img.classList.add('loaded');document.getElementById('cover-status').textContent='cover found!';return;}
+    }
+    noCover();
+  }catch(e){noCover();}
+}
+function noCover(){coverUrl=null;document.getElementById('cover-preview-img').classList.remove('loaded');document.getElementById('cover-status').textContent='no cover — placeholder used';}
+
+async function addBook() {
+  const title = document.getElementById('input-title').value.trim();
+  const author = document.getElementById('input-author').value.trim();
+  if (!title || !author) return;
+
+  const newBook = {
+    title,
+    author,
+    series: '',
+    coverUrl: coverUrl || null,
+    ratings: { darian: 0, joey: 0, jami: 0 },
+    reviews: { darian: '', joey: '', jami: '' }
+  };
+
+  const { data, error } = await _supabase
+    .from('books')
+    .insert([newBook])
+    .select();
+
+  if (error) {
+    showToast('Error adding book');
+    console.error(error);
+  } else {
+    books.push(data[0]);
+    document.getElementById('input-title').value = '';
+    document.getElementById('input-author').value = '';
+    resetCoverPreview();
+    document.getElementById('btn-add').disabled = true;
+    showToast(`"${title}" added!`);
+    setTimeout(() => switchTab('shelf'), 700);
+    render();
+  }
+}
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+function testImg(src){return new Promise(res=>{const i=new Image();i.onload=()=>res(i.naturalWidth>1);i.onerror=()=>res(false);i.src=src;setTimeout(()=>res(false),5000);});}
+
+load();
+</script>
+</body>
+</html>
